@@ -6,33 +6,28 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => {
-  const env = loadEnv(mode, process.cwd());
+  const env = loadEnv(mode, process.cwd())
   return {
-    plugins: [
-      vue(),
-      vueDevTools(),
-    ],
+    plugins: [vue(), vueDevTools()],
     resolve: {
       alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url))
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
     server: {
       proxy: {
-        "/api": {
-          target: "http://127.0.0.1:5478",
+        '/api': {
+          target: 'http://127.0.0.1:5050',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, '')
-        }, 
+          rewrite: (path) => path.replace(/^\/api/, ''),
+        },
         '/wsApi': {
-          target: 'ws://127.0.0.1:5478',
+          target: 'ws://127.0.0.1:5050',
           ws: true, // ✅ 告诉 Vite 这是 WebSocket
           changeOrigin: true,
-          rewrite: path => path.replace(/^\/wsApi/, '') // 可选
-        }
+          rewrite: (path) => path.replace(/^\/wsApi/, ''), // 可选
+        },
       },
-
     },
   }
-
 })

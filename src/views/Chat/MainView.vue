@@ -4,10 +4,10 @@
     <!-- <a-modal v-model:open="userIdModalVisible" title="设置用户名" @ok="handleSetUserId" ok-text="保存">
       <a-input v-model:value="userIdInput" placeholder="请输入用户名或用户ID" />
     </a-modal> -->
-    <!-- 左侧联系人列表 -->
+    <!-- 左侧聊天列表 -->
     <div class="sidebar">
       <div class="sidebar-header">
-        <span>联系人</span>
+        <span>聊天</span>
         <PlusCircleOutlined @click="showAddContactModal" style="cursor: pointer; font-size: 18px;" />
       </div>
 
@@ -17,31 +17,27 @@
       </div>
 
       <a-list bordered class="contact-list">
-        <a-list-item v-for="item in filteredContacts" :key="item.id" :class="{ active: item.id === activeContact?.id }"
-          @click="selectContact(item)">
-          {{ item.name }} (ID: {{ item.id }})
+        <a-list-item v-for="item in filteredContacts" :key="item.group_id"
+          :class="{ active: item.group_id === activeContact?.group_id }" @click="selectContact(item)">
+          {{ item.name }}
         </a-list-item>
       </a-list>
     </div>
     <!-- 添加联系人弹窗 -->
-    <a-modal
-      v-model:open="addContactModalVisible"
-      title="添加联系人"
-      @ok="handleAddContact"
-      ok-text="添加"
-    >
-      <a-input
-        v-model:value="addSearchText"
-        placeholder="输入用户名或ID搜索"
-        @input="onAddSearchChange"
-        allow-clear
-      />
-      <a-list
-        v-if="searchResults.length"
-        :data-source="searchResults"
-        bordered
-        style="margin-top: 12px"
-      >
+    <a-modal v-model:open="addContactModalVisible" title="添加联系人或群组" @ok="handleAddContact" ok-text="添加">
+      <a-row>
+        <a-col flex="auto">
+          <a-input v-model:value="addSearchText" placeholder="输入用户名或ID搜索" @input="onAddSearchChange" allow-clear />
+        </a-col>
+        <a-col>
+          <a-radio-group v-model:value="searchType">
+            <a-radio-button value="contact">联系人</a-radio-button>
+            <a-radio-button value="group">群组</a-radio-button>
+          </a-radio-group>
+        </a-col>
+      </a-row>
+
+      <a-list v-if="searchResults.length" :data-source="searchResults" bordered style="margin-top: 12px">
         <template #renderItem="{ item }">
           <a-list-item @click="selectSearchResult(item)" style="cursor: pointer">
             {{ item.name }} (ID: {{ item.id }})
@@ -56,14 +52,21 @@
     <div class="chat-box">
       <div class="chat-header">{{ activeContact?.name || '请选择联系人' }}</div>
 
-      <div class="chat-content">
-        <div v-if="chatSelected" v-for="(msg, index) in messages" :key="index"
-          :class="['chat-message', msg.from === 'me' ? 'from-me' : 'from-other']">
-          {{ msg.text }}
+      <div class="chat-content" v-if="chatSelected">
+        <div v-for="(msg, index) in conversationStore.displayMessages" :key="index"
+          :class="['chat-message', msg.From === userID ? 'from-me' : 'from-other']">
+          <div v-if="msg.Type === MsgType['text']">
+            {{ msg.Content }}
+          </div>
+          <div v-else-if="msg.Type === MsgType['image']">
+            <img :src="msg.Content" alt="Image message" style="max-width: 100%; border-radius: 8px;" />
+          </div>
+          <div v-else>
+            未知消息类型
+          </div>
         </div>
       </div>
-
-      <div class="chat-input">
+      <div class="chat-input" v-if="chatSelected">
         <a-input-search v-model:value="inputText" placeholder="输入消息..." enter-button="发送" @search="sendMessage" />
       </div>
     </div>
@@ -71,68 +74,113 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { useUserStore } from '@/stores/auth'
-import { setUserID, getUserID, getToken } from '@/stores/local'
+import { ref, onMounted, onBeforeUnmount, computed, reactive } from 'vue'
+import { getUserID, getToken } from '@/stores/local'
 import { useSocket } from '@/utils/socket'
-import { API_URLS, API_WS_URLS } from '@/api/urls'
-import type { Contact } from '@/types/contact'
+import { API_WS_URLS } from '@/api/urls'
+import type { Contact, GetUserContactsReq } from '@/types/contact'
+import { MsgType } from '@/types/socket'
 import { PlusCircleOutlined } from '@ant-design/icons-vue'
-import {debounce} from 'lodash-es'
-const userStore = useUserStore()
+import { debounce } from 'lodash-es'
+import { useConversationStore } from '@/stores/chat'
+import { GetUserContacts } from '@/services/user'
+import { decodeChatMsg, encodeChatMsg, type ChatMsg, msgType, type Long } from '@/proto/chat'
+import { intToLong } from '@/utils/common'
 const userIdModalVisible = ref(false)
-const userIdInput = ref('')
 const chatSelected = ref(false)
+const userID = getUserID()
+const activeContact = ref<Contact | null>(null)
+const inputText = ref('')
+const conversationStore = useConversationStore()
+const searchType = ref('contact') // 搜索类型，默认为联系人
 
-interface Message {
-  text: string
-  from: 'me' | 'other'
-}
 // 搜索联系人
 const searchText = ref('')
 const filteredContacts = computed(() => {
   const kw = searchText.value.toLowerCase()
-  return contacts.value.filter(c =>
-    c.name.toLowerCase().includes(kw) || String(c.id).includes(kw)
+  return contacts?.value?.filter(c =>
+    c.name.toLowerCase().includes(kw) || String(c.group_id).includes(kw)
   )
 })
 const contacts = ref<Contact[]>([
-  { id: 1, name: 'Alice' },
-  { id: 2, name: 'Bob' },
-  { id: 3, name: 'Charlie' }
+  { group_id: 'sss', name: 'Alice' },
+  { group_id: 'aadd', name: 'Bob' },
+  { group_id: 'sdwd', name: 'Charlie' }
 ])
 
-const activeContact = ref<Contact | null>(null)
-const messages = ref<Message[]>([])
-const inputText = ref('')
+
 
 const selectContact = (contact: Contact) => {
   chatSelected.value = true
   activeContact.value = contact
-  messages.value = [
-    { text: '你好，我是 ' + contact.name, from: 'other' },
-    { text: '你好！', from: 'me' }
-  ]
+  // 清空数据
+  conversationStore.reset()
+  conversationStore.conversationID = contact.group_id
+  conversationStore.loadHistory()
+  // conversationStore.addMessage({ Content: "我是" + contact.name, Code: 2000, From: '2222', To: userID, Type: MsgType['text'], CreateAt: Date.now() - 9999 })
+  // conversationStore.addMessage({ Content: "你好", Code: 2000, From: userID, To: '2222', Type: MsgType['text'], CreateAt: Date.now() - 9958 })
   inputText.value = ''
 }
+
+const WsMsgHandler = (event: MessageEvent): void => {
+  if (!event.data) {
+    console.warn("ws msg is empty");
+    return
+  }
+  const buf = new Uint8Array(event.data);
+  if (buf.length === 0) {
+    console.warn("ws msg buf is empty");
+    return
+  }
+  if (event.data != 'pong') {
+    console.debug("origin ws msg:", buf);
+    const msg = decodeChatMsg(buf)
+    console.debug("ws msg:", msg);
+    if (msg.code != 2000) {
+      console.error("err get msg:", msg);
+      return
+    }
+    if (msg.from == 'msg_received') {
+      conversationStore.updateMsg(msg?.text || '', msg.id || '')
+      return
+    }
+    switch (msg.type) {
+      case msgType['TEXT']:
+        conversationStore.addMessage(msg)
+        break;
+
+      default:
+        console.warn("unknown msg type:", msg.type);
+        break;
+    }
+
+  }
+}
+
 const { send, close, isConnected } = useSocket({
   url: API_WS_URLS.chatWs,
   token: getToken(),
-  onMessage: (event) => {
-    const data = JSON.parse(event.data)
-    messages.value.push({ text: data, from: 'other' })
-  }
+  onMessage: WsMsgHandler
 })
 
 
 const sendMessage = () => {
-  if (!inputText.value.trim()) return
-  messages.value.push({ text: inputText.value, from: 'me' })
+  if (inputText.value == '') {
+    console.warn("input text is empty");
+    return
+  }
+  const msg = {
+    id: crypto.randomUUID(),
+    type: msgType['TEXT'],
+    from: userID,
+    to: activeContact.value?.group_id || '',
+    text: inputText.value,
+    created_at: intToLong(Date.now()),
+  }
+  console.debug("send msg:", msg);
+  conversationStore.addMessage(msg)
   inputText.value = ''
-  // 可模拟回复：
-  setTimeout(() => {
-    messages.value.push({ text: '收到你的消息', from: 'other' })
-  }, 500)
+  send(encodeChatMsg(msg))
 }
 
 // 添加联系人弹窗相关
@@ -155,13 +203,13 @@ const performSearch = () => {
     return
   }
   const mockUsers: Contact[] = [
-    { id: 4, name: 'David' },
-    { id: 5, name: 'Eve' },
-    { id: 6, name: 'Alfred' },
-    { id: '007', name: 'James Bond' }
+    { group_id: 'ass', name: 'David' },
+    { group_id: 'sda', name: 'Eve' },
+    { group_id: 'dsadaw', name: 'Alfred' },
+    { group_id: '007', name: 'James Bond' }
   ]
   searchResults.value = mockUsers.filter(u =>
-    u.name.toLowerCase().includes(kw) || String(u.id).includes(kw)
+    u.name.toLowerCase().includes(kw) || String(u.group_id).includes(kw)
   )
 }
 
@@ -174,7 +222,7 @@ const onAddSearchChange = () => {
 }
 
 const selectSearchResult = (contact: Contact) => {
-  if (!contacts.value.find(c => c.id === contact.id)) {
+  if (!contacts.value.find(c => c.group_id === contact.group_id)) {
     contacts.value.push(contact)
   }
   addContactModalVisible.value = false
@@ -188,6 +236,21 @@ const handleAddContact = () => {
   }
 }
 
+const refreshContact = async () => {
+  try {
+    const req: GetUserContactsReq = {}
+    const resp = await GetUserContacts(req)
+    if (resp.data) {
+      contacts.value = resp.data.contacts
+      console.debug("refresh contacts:", resp.data.contacts)
+    } else {
+      contacts.value = []
+    }
+  } catch (error) {
+    console.error('Failed to refresh contacts:', error)
+  }
+}
+
 // const handleSetUserId = () => {
 //   if (!userIdInput.value.trim()) return
 //   setUserID(userIdInput.value.trim())
@@ -198,7 +261,8 @@ onMounted(() => {
   if (!getUserID()) {
     userIdModalVisible.value = true
   }
-
+  // 初始化联系人
+  refreshContact()
 })
 onBeforeUnmount(() => {
   close()

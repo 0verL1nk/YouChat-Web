@@ -1,3 +1,4 @@
+import type { ChatMsg } from '@/types/socket'
 import { message } from 'ant-design-vue'
 import { ref } from 'vue'
 
@@ -14,13 +15,7 @@ interface SocketOptions {
 }
 
 export function useSocket(options: SocketOptions) {
-  const {
-    url,
-    token,
-    onMessage,
-    reconnectInterval = 3000,
-    heartbeatInterval = 15000
-  } = options
+  const { url, token, onMessage, reconnectInterval = 3000, heartbeatInterval = 15000 } = options
 
   let socket: WebSocket | null = null
   let reconnectTimer: number | null = null
@@ -31,11 +26,11 @@ export function useSocket(options: SocketOptions) {
   const connect = () => {
     const fullUrl = `${url}?token=${encodeURIComponent(token)}`
     socket = new WebSocket(fullUrl)
-
+    socket.binaryType = 'arraybuffer'
     socket.onopen = () => {
       console.log('[WebSocket] 连接成功')
       isConnected.value = true
-      message.success("成功连接服务器")
+      message.success('成功连接服务器')
       startHeartbeat()
     }
 
@@ -44,7 +39,7 @@ export function useSocket(options: SocketOptions) {
     }
 
     socket.onerror = (error) => {
-      message.error("无法连接服务器")
+      message.error('无法连接服务器')
       console.error('[WebSocket] 错误:', error)
     }
 
@@ -79,9 +74,9 @@ export function useSocket(options: SocketOptions) {
     }, reconnectInterval)
   }
 
-  const send = (data: any) => {
+  const send = (data: Uint8Array) => {
     if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(data))
+      socket.send(data)
     } else {
       console.warn('[WebSocket] 发送失败，未连接')
     }

@@ -1,3 +1,1 @@
-export const GetConversation=()=>{
-    
-}
+export const GetConversation = () => {}

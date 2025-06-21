@@ -16,7 +16,7 @@
         <a-form-item label="验证码" name="captcha" :rules="rules.captcha">
           <div class="captcha-wrapper">
             <a-input v-model:value="form.captcha" placeholder="验证码" style="width: 60%;" />
-            <img :src="captchaUrl" @click="refreshCaptcha" alt="captcha" class="captcha-img" />
+            <img :src="captchaBase64" @click="refreshCaptcha" alt="captcha" class="captcha-img" />
           </div>
         </a-form-item>
 
@@ -36,15 +36,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref,reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
-import { useUserStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import { Login } from '@/services/auth'
 import type { LoginReq } from '@/types/auth'
 import { setUserID, setToken } from '@/stores/local'
 
-
+const captchaBase64 = ref('')
+const captchaKey = ref('')
 
 const form = reactive<LoginReq>({
   email: '',
@@ -53,7 +53,6 @@ const form = reactive<LoginReq>({
 })
 
 const loginForm = ref<FormInstance>()
-const userStore = useUserStore()
 const router = useRouter()
 
 const rules = {
@@ -62,9 +61,8 @@ const rules = {
   captcha: [{ required: false, message: '请输入验证码', trigger: 'blur' }]
 }
 
-const captchaUrl = ref(`/api/captcha?ts=${Date.now()}`)
 const refreshCaptcha = () => {
-  captchaUrl.value = `/api/captcha?ts=${Date.now()}`
+
 }
 
 const handleSubmit = () => {
@@ -75,8 +73,8 @@ const handleSubmit = () => {
     //   const redirect = router.currentRoute.value.query.redirect as string || '/'
     //   router.push(redirect)
     // })
-    console.log("user login:",form)
-    var res = await Login(form)
+    console.log("user login:", form)
+    const res = await Login(form)
     setToken(res.data.token)
     setUserID(res.data.user_id)
     const redirect = '/'
@@ -84,7 +82,6 @@ const handleSubmit = () => {
     message.success("登陆成功")
     console.log('提交表单', form)
   }).catch(err => {
-    message.error(err.data.error_msg||"登陆失败")
     console.log('验证失败', err)
   })
 }
@@ -98,6 +95,11 @@ const goRegister = () => {
 const goForgot = () => {
   router.push({ path: '/forgot-password' })
 }
+onMounted(() => {
+  // 初始化验证码
+  refreshCaptcha()
+})
+
 </script>
 
 <style scoped>

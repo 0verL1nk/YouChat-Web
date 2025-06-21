@@ -8,10 +8,11 @@ export const API_URLS = {
   getCaptcha: `${API_BASE}/auth/captcha`,
   register: `${API_BASE}/auth/register`,
   userInfo: `${API_BASE}/user/info`,
-
+  createGroup: `${API_BASE}/group/create`,
+  getConversations: `${API_BASE}/chat/conversations`,
+  getUserContacts: `${API_BASE}/user/contacts`,
 }
 
-
 export const API_WS_URLS = {
-  chatWs: `${API_BASE_WS}/chat/ws`
+  chatWs: `${API_BASE_WS}/chat/ws`,
 }
