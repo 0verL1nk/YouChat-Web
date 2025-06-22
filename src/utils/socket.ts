@@ -1,4 +1,4 @@
-import type { ChatMsg } from '@/types/socket'
+
 import { message } from 'ant-design-vue'
 import { ref } from 'vue'
 
@@ -12,10 +12,18 @@ interface SocketOptions {
   onMessage?: MessageHandler
   reconnectInterval?: number
   heartbeatInterval?: number
+  onConnectionChange?: (status: boolean) => void
 }
 
 export function useSocket(options: SocketOptions) {
-  const { url, token, onMessage, reconnectInterval = 3000, heartbeatInterval = 15000 } = options
+  const {
+    url,
+    token,
+    onMessage,
+    reconnectInterval = 3000,
+    heartbeatInterval = 15000,
+    onConnectionChange,
+  } = options
 
   let socket: WebSocket | null = null
   let reconnectTimer: number | null = null
@@ -32,6 +40,7 @@ export function useSocket(options: SocketOptions) {
       isConnected.value = true
       message.success('成功连接服务器')
       startHeartbeat()
+      onConnectionChange?.(true)
     }
 
     socket.onmessage = (event) => {
@@ -46,6 +55,7 @@ export function useSocket(options: SocketOptions) {
     socket.onclose = () => {
       console.warn('[WebSocket] 连接断开，尝试重连')
       isConnected.value = false
+      onConnectionChange?.(false)
       stopHeartbeat()
       attemptReconnect()
     }

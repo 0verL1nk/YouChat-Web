@@ -1,10 +1,5 @@
 <template>
   <div class="chat-container">
-    <!-- 设置用户名弹窗 -->
-    <!-- <a-modal v-model:open="userIdModalVisible" title="设置用户名" @ok="handleSetUserId" ok-text="保存">
-      <a-input v-model:value="userIdInput" placeholder="请输入用户名或用户ID" />
-    </a-modal> -->
-    <!-- 左侧聊天列表 -->
     <div class="sidebar">
       <div class="sidebar-header">
         <span>聊天</span>
@@ -67,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, reactive, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, defineEmits } from 'vue'
 import { getUserID, getToken } from '@/stores/local'
 import { useSocket } from '@/utils/socket'
 import { API_WS_URLS } from '@/api/urls'
@@ -76,10 +71,15 @@ import { PlusCircleOutlined } from '@ant-design/icons-vue'
 import { debounce } from 'lodash-es'
 import { useConversationStore } from '@/stores/chat'
 import { GetUserContacts } from '@/services/user'
-import { decodeChatMsg, encodeChatMsg, type ChatMsg, type Long } from '@/proto/chat'
+import { decodeChatMsg, encodeChatMsg, type ChatMsg } from '@/proto/chat'
 import { intToLong } from '@/utils/common'
 import MessageCard from '@/components/chat/MessageCard.vue'
 import { MsgType } from '@/types/socket'
+
+const emit = defineEmits<{
+  (e: 'connection-change', status: boolean): void
+}>()
+
 const userIdModalVisible = ref(false)
 const chatSelected = ref(false)
 const userID = getUserID()
@@ -104,8 +104,6 @@ const contacts = ref<Contact[]>([
   { group_id: 'sdwd', name: 'Charlie' }
 ])
 
-
-
 const selectContact = async (contact: Contact) => {
   chatSelected.value = true
   activeContact.value = contact
@@ -115,8 +113,6 @@ const selectContact = async (contact: Contact) => {
   await conversationStore.loadHistory()
   // 在消息加载完成后滚动到底部
   scrollToBottom()
-  // conversationStore.addMessage({ Content: "我是" + contact.name, Code: 2000, From: '2222', To: userID, Type: MsgType['text'], CreateAt: Date.now() - 9999 })
-  // conversationStore.addMessage({ Content: "你好", Code: 2000, From: userID, To: '2222', Type: MsgType['text'], CreateAt: Date.now() - 9958 })
   inputText.value = ''
 }
 
@@ -161,10 +157,13 @@ const WsMsgHandler = (event: MessageEvent): void => {
   }
 }
 
-const { send, close, isConnected } = useSocket({
+const { send, close } = useSocket({
   url: API_WS_URLS.chatWs,
   token: getToken(),
-  onMessage: WsMsgHandler
+  onMessage: WsMsgHandler,
+  onConnectionChange: (status) => {
+    emit('connection-change', status)
+  }
 })
 
 const isAtBottom = () => {
@@ -293,28 +292,27 @@ const refreshContact = async () => {
   }
 }
 
-// const handleSetUserId = () => {
-//   if (!userIdInput.value.trim()) return
-//   setUserID(userIdInput.value.trim())
-//   console.log("userID:", getUserID())
-//   userIdModalVisible.value = false
-// }
-onMounted(() => {
+onMounted(async () => {
   if (!getUserID()) {
     userIdModalVisible.value = true
   }
   // 初始化联系人
-  refreshContact()
+  await refreshContact()
+  selectContact(contacts.value[0])
 })
 onBeforeUnmount(() => {
   close()
+})
+defineExpose({
+  close
 })
 </script>
 
 <style scoped>
 .chat-container {
   display: flex;
-  height: 100vh;
+  height: 100%;
+  /* 修改为 100% */
   background: #f0f2f5;
 }
 
@@ -369,27 +367,6 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   background: #f9f9f9;
   scroll-behavior: smooth;
-}
-
-.chat-message {
-  margin-bottom: 10px;
-  max-width: 60%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  word-break: break-word;
-}
-
-.from-me {
-  background: #d6f5d6;
-  align-self: flex-end;
-  margin-left: auto;
-}
-
-.from-other {
-  background: #fff;
-  border: 1px solid #eee;
-  align-self: flex-start;
-  margin-right: auto;
 }
 
 .chat-input {

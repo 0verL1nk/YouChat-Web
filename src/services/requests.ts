@@ -1,10 +1,8 @@
 import axios from 'axios'
 import { getToken, removeToken } from '@/stores/local'
-import { useRouter } from 'vue-router'
-import { API_URLS } from '@/api/urls'
 import { message } from 'ant-design-vue'
-// import { useAppStore } from '@/stores/appStore'
-const [contextHolder] = message.useMessage()
+import { useLoadingStore } from '@/stores/loading'
+
 const request = axios.create({
   // 在生产环境使用完整的 API URL，在开发环境使用相对路径
   baseURL: '',
@@ -13,7 +11,7 @@ const request = axios.create({
 })
 
 // 需要忽略全局loading的请求路径
-const ignoreLoadingPaths = []
+const ignoreLoadingPaths: string[] = []
 
 // 请求拦截器
 request.interceptors.request.use(
@@ -23,17 +21,25 @@ request.interceptors.request.use(
       // headers里放token
       config.headers['Authorization'] = `Bearer ${token}`
     }
+    // 显示全局加载状态
+    if (!ignoreLoadingPaths.includes(config.url || '')) {
+      try {
+        const loadingStore = useLoadingStore()
+        loadingStore.showLoading()
+      } catch (error) {
+        console.warn('Loading store not available yet', error)
+      }
+    }
     return config
   },
   (error) => {
     console.error(error)
-    // 隐藏全局加载状态
-    // try {
-    //     const appStore = useAppStore()
-    //     appStore.hideLoading()
-    // } catch (e) {
-    //     console.error('Failed to hide loading:', e)
-    // }
+    try {
+      const loadingStore = useLoadingStore()
+      loadingStore.hideLoading()
+    } catch (error) {
+      console.warn('Loading store not available yet', error)
+    }
     return Promise.reject(error)
   },
 )
@@ -41,13 +47,12 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response) => {
-    // 隐藏全局加载状态
-    // try {
-    //     const appStore = useAppStore()
-    //     appStore.hideLoading()
-    // } catch (e) {
-    //     console.error('Failed to hide loading:', e)
-    // }
+    try {
+      const loadingStore = useLoadingStore()
+      loadingStore.hideLoading()
+    } catch (error) {
+      console.warn('Loading store not available yet', error)
+    }
 
     // 对于blob和text等非JSON响应，直接返回
     const contentType = response.headers['content-type'] || ''
@@ -67,18 +72,20 @@ request.interceptors.response.use(
     return Promise.reject(new Error(response.data.info || '操作失败'))
   },
   (error) => {
-    // 隐藏全局加载状态
-    // try {
-    //     const appStore = useAppStore()
-    //     appStore.hideLoading()
-    // } catch (e) {
-    //     console.error('Failed to hide loading:', e)
-    // }
+    try {
+      const loadingStore = useLoadingStore()
+      loadingStore.hideLoading()
+    } catch (error) {
+      console.warn('Loading store not available yet', error)
+    }
 
     console.debug('API Error:', error.config?.url, error.message, error.response?.data)
 
     if (error.response) {
       switch (error.response.status) {
+        case 400:
+          message.error(error.response.data?.error_msg || '请求错误')
+          break
         case 401:
           removeToken()
           window.location.href = '/login' // 使用原生重定向

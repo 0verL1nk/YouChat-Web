@@ -8,12 +8,15 @@
         <a-form-item label="邮箱" name="email" :rules="rules.email">
           <a-input v-model:value="form.email" placeholder="请输入邮箱" />
         </a-form-item>
+        <a-form-item label="昵称" name="nickName" :rules="rules.nickName">
+          <a-input v-model:value="form.nickName" placeholder="请输入昵称" />
+        </a-form-item>
 
         <a-form-item label="密码" name="password" :rules="rules.password">
           <a-input-password v-model:value="form.password" placeholder="请输入密码" />
         </a-form-item>
 
-        <a-form-item label="确认密码" name="password" :rules="rules.rePassword">
+        <a-form-item label="确认密码" name="rePassword" :rules="rules.rePassword">
           <a-input-password v-model:value="form.rePassword" placeholder="请再次输入密码" />
         </a-form-item>
         <a-form-item label="验证码" name="captcha" :rules="rules.captcha">
@@ -48,6 +51,7 @@ import type { RuleObject } from 'ant-design-vue/es/form'
 
 const form = reactive({
   email: '',
+  nickName: '',
   password: '',
   rePassword: '',
   captcha: ''
@@ -55,23 +59,22 @@ const form = reactive({
 
 const registerForm = ref<FormInstance>()
 const router = useRouter()
-
+// 添加密码验证函数
+const validatePassword = async (_rule: RuleObject, value: string) => {
+  if (value !== form.password) {
+    return Promise.reject('两次输入的密码不一致')
+  }
+  return Promise.resolve()
+}
 const rules = {
   email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }],
+  nickName: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   rePassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
-    {
-      validator: (_rule: RuleObject, value: string) => {
-        if (value !== form.password) {
-          return Promise.reject('两次输入的密码不一致')
-        }
-        return Promise.resolve()
-      },
-      trigger: 'blur'
-    }
+    { validator: validatePassword, trigger: 'blur' }
   ],
-  captcha: [{ required: false, message: '请输入验证码', trigger: 'blur' }]
+  captcha: [{ required: false, message: '请输入验证码', trigger: ['blur', 'change'] }]
 }
 
 const captchaUrl = ref(`/api/captcha?ts=${Date.now()}`)
@@ -83,20 +86,27 @@ const handleSubmit = () => {
   registerForm.value?.validate().then(async () => {
     const req: RegisterReq = {
       email: form.email,
+      nick_name: form.nickName,
       password: form.password,
       captcha: form.captcha
     }
     console.log("user register:", req)
     await Register(req)
-    const redirect = '/'
-    router.push(redirect)
+    router.push({
+      path: '/login',
+      query: {
+        email: form.email
+      }
+    })
     message.success("注册成功")
     console.log('提交表单', form)
   })
 }
 // 跳转到登录页面
 const goLogin = () => {
-  router.push({ path: '/login' })
+  router.push({
+    path: '/login'
+  })
 }
 </script>
 

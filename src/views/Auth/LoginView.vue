@@ -38,13 +38,13 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Login } from '@/services/auth'
 import type { LoginReq } from '@/types/auth'
 import { setUserID, setToken } from '@/stores/local'
 
 const captchaBase64 = ref('')
-const captchaKey = ref('')
+// const captchaKey = ref('')
 
 const form = reactive<LoginReq>({
   email: '',
@@ -54,7 +54,7 @@ const form = reactive<LoginReq>({
 
 const loginForm = ref<FormInstance>()
 const router = useRouter()
-
+const route = useRoute()
 const rules = {
   email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
@@ -98,6 +98,11 @@ const goForgot = () => {
 onMounted(() => {
   // 初始化验证码
   refreshCaptcha()
+  // 获取query参数
+  const { email } = route.query
+  if (email) {
+    form.email = email as string
+  }
 })
 
 </script>
