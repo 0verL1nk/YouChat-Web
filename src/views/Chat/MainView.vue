@@ -52,19 +52,12 @@
     <div class="chat-box">
       <div class="chat-header">{{ activeContact?.name || '请选择联系人' }}</div>
 
-      <div class="chat-content" v-if="chatSelected">
-        <div v-for="(msg, index) in conversationStore.displayMessages" :key="index"
-          :class="['chat-message', msg.From === userID ? 'from-me' : 'from-other']">
-          <div v-if="msg.Type === MsgType['text']">
-            {{ msg.Content }}
-          </div>
-          <div v-else-if="msg.Type === MsgType['image']">
-            <img :src="msg.Content" alt="Image message" style="max-width: 100%; border-radius: 8px;" />
-          </div>
-          <div v-else>
-            未知消息类型
-          </div>
+      <div class="chat-content" v-if="chatSelected" ref="chatContentRef" @scroll="handleScroll">
+        <div v-if="conversationStore.loadingHistory" class="loading-history">
+          <a-spin size="small" /> 加载历史消息...
         </div>
+        <MessageCard v-for="(msg, index) in conversationStore.displayMessages" :key="index" :msg="msg"
+          :userID="userID" />
       </div>
       <div class="chat-input" v-if="chatSelected">
         <a-input-search v-model:value="inputText" placeholder="输入消息..." enter-button="发送" @search="sendMessage" />
@@ -74,18 +67,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, reactive } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, reactive, nextTick } from 'vue'
 import { getUserID, getToken } from '@/stores/local'
 import { useSocket } from '@/utils/socket'
 import { API_WS_URLS } from '@/api/urls'
 import type { Contact, GetUserContactsReq } from '@/types/contact'
-import { MsgType } from '@/types/socket'
 import { PlusCircleOutlined } from '@ant-design/icons-vue'
 import { debounce } from 'lodash-es'
 import { useConversationStore } from '@/stores/chat'
 import { GetUserContacts } from '@/services/user'
-import { decodeChatMsg, encodeChatMsg, type ChatMsg, msgType, type Long } from '@/proto/chat'
+import { decodeChatMsg, encodeChatMsg, type ChatMsg, type Long } from '@/proto/chat'
 import { intToLong } from '@/utils/common'
+import MessageCard from '@/components/chat/MessageCard.vue'
+import { MsgType } from '@/types/socket'
 const userIdModalVisible = ref(false)
 const chatSelected = ref(false)
 const userID = getUserID()
@@ -93,6 +87,8 @@ const activeContact = ref<Contact | null>(null)
 const inputText = ref('')
 const conversationStore = useConversationStore()
 const searchType = ref('contact') // 搜索类型，默认为联系人
+// 添加 chatContentRef
+const chatContentRef = ref<HTMLElement | null>(null)
 
 // 搜索联系人
 const searchText = ref('')
@@ -110,13 +106,15 @@ const contacts = ref<Contact[]>([
 
 
 
-const selectContact = (contact: Contact) => {
+const selectContact = async (contact: Contact) => {
   chatSelected.value = true
   activeContact.value = contact
   // 清空数据
   conversationStore.reset()
   conversationStore.conversationID = contact.group_id
-  conversationStore.loadHistory()
+  await conversationStore.loadHistory()
+  // 在消息加载完成后滚动到底部
+  scrollToBottom()
   // conversationStore.addMessage({ Content: "我是" + contact.name, Code: 2000, From: '2222', To: userID, Type: MsgType['text'], CreateAt: Date.now() - 9999 })
   // conversationStore.addMessage({ Content: "你好", Code: 2000, From: userID, To: '2222', Type: MsgType['text'], CreateAt: Date.now() - 9958 })
   inputText.value = ''
@@ -136,16 +134,19 @@ const WsMsgHandler = (event: MessageEvent): void => {
     console.debug("origin ws msg:", buf);
     const msg = decodeChatMsg(buf)
     console.debug("ws msg:", msg);
-    if (msg.code != 2000) {
-      console.error("err get msg:", msg);
-      return
-    }
     if (msg.from == 'msg_received') {
       conversationStore.updateMsg(msg?.text || '', msg.id || '')
       return
     }
+    if (msg.from == 'system') {
+      return
+    }
+    // 如果type不存在为0
+    if (!msg.type) {
+      msg.type = MsgType['text']
+    }
     switch (msg.type) {
-      case msgType['TEXT']:
+      case MsgType['text']:
         conversationStore.addMessage(msg)
         break;
 
@@ -153,7 +154,10 @@ const WsMsgHandler = (event: MessageEvent): void => {
         console.warn("unknown msg type:", msg.type);
         break;
     }
-
+    const shouldScroll = isAtBottom() // 在添加消息前判断是否在底部
+    if (shouldScroll) {
+      scrollToBottom()
+    }
   }
 }
 
@@ -163,15 +167,29 @@ const { send, close, isConnected } = useSocket({
   onMessage: WsMsgHandler
 })
 
+const isAtBottom = () => {
+  if (!chatContentRef.value) return false
+  const { scrollTop, scrollHeight, clientHeight } = chatContentRef.value
+  // 考虑一点误差范围(2px)
+  return scrollHeight - scrollTop - clientHeight <= 2
+}
+// 滚动到底部的函数
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (chatContentRef.value) {
+      chatContentRef.value.scrollTop = chatContentRef.value.scrollHeight
+    }
+  })
+}
 
 const sendMessage = () => {
   if (inputText.value == '') {
     console.warn("input text is empty");
     return
   }
-  const msg = {
+  const msg: ChatMsg = {
     id: crypto.randomUUID(),
-    type: msgType['TEXT'],
+    type: MsgType['text'],
     from: userID,
     to: activeContact.value?.group_id || '',
     text: inputText.value,
@@ -181,6 +199,30 @@ const sendMessage = () => {
   conversationStore.addMessage(msg)
   inputText.value = ''
   send(encodeChatMsg(msg))
+  scrollToBottom()
+}
+
+// 添加处理滚动的函数
+const handleScroll = async (e: Event) => {
+  const target = e.target as HTMLElement
+  // 当滚动到顶部时（考虑一点误差）
+  if (target.scrollTop <= 10) {
+    // 如果还有更多历史消息
+    if (conversationStore.hasMore && !conversationStore.loadingHistory) {
+      // 记录当前滚动位置
+      const oldHeight = target.scrollHeight
+      const oldScroll = target.scrollTop
+
+      // 加载历史消息
+      await conversationStore.loadHistory()
+
+      // 保持相对滚动位置
+      nextTick(() => {
+        const newHeight = target.scrollHeight
+        target.scrollTop = oldScroll + (newHeight - oldHeight)
+      })
+    }
+  }
 }
 
 // 添加联系人弹窗相关
@@ -326,6 +368,7 @@ onBeforeUnmount(() => {
   padding: 16px;
   overflow-y: auto;
   background: #f9f9f9;
+  scroll-behavior: smooth;
 }
 
 .chat-message {
@@ -353,5 +396,12 @@ onBeforeUnmount(() => {
   padding: 12px;
   border-top: 1px solid #f0f0f0;
   background: #fff;
+}
+
+.loading-history {
+  text-align: center;
+  padding: 8px 0;
+  color: #999;
+  font-size: 12px;
 }
 </style>

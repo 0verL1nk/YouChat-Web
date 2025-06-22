@@ -1,6 +1,7 @@
 // Token 的 key 名称
 const TOKEN_KEY = 'youchat_token'
 const USERID_KEY = 'youchat_user_id'
+const USER_AVATAR_KEY = 'youchat_user_avatar_'
 // 获取 token
 export const getToken = (): string => {
   return localStorage.getItem(TOKEN_KEY) || ''
@@ -32,4 +33,15 @@ export const getUserID = (): string => {
 
 export const removeUserID = (): void => {
   localStorage.removeItem(USERID_KEY)
+}
+
+export const setUserAvatar = (userID: string, avatar: string): void => {
+  localStorage.setItem(`${USER_AVATAR_KEY}${userID}`, avatar)
+}
+
+export const getUserAvatar = (userID: string): string => {
+  return localStorage.getItem(`${USER_AVATAR_KEY}${userID}`) || ''
+}
+export const removeUserAvatar = (userID: string): void => {
+  localStorage.removeItem(`${USER_AVATAR_KEY}${userID}`)
 }

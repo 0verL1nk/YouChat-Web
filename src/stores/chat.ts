@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import axios from 'axios'
-import { msgType, type ChatMsg, type Long } from '@/proto/chat'
+import { type ChatMsg, type Long } from '@/proto/chat'
 import { type ChatMsg as chatMsg, MsgType, type ChatMsgText } from '@/types/socket'
 import request from '@/services/requests'
 import { API_URLS } from '@/api/urls'
@@ -15,7 +15,7 @@ export const useConversationStore = defineStore('conversation', {
     loadingHistory: false,
     hasMore: true, // 是否还有更早的消息可加载
     pageSize: 50,
-    page: 0,
+    page: 1,
     ws: null, // WebSocket 实例
   }),
   actions: {
@@ -37,12 +37,14 @@ export const useConversationStore = defineStore('conversation', {
         if (batch.length < this.pageSize) {
           this.hasMore = false
         }
+        // 创建临时数组存储转换后的消息
+        const newMessages: ConversationMsg[] = []
+
         for (const msg of batch) {
           switch (msg.type) {
             case MsgType['text']:
-              //
               const content = msg.Content as ChatMsgText
-              this.displayMessages.push({
+              newMessages.push({
                 ID: msg.id,
                 From: msg.from,
                 To: msg.to,
@@ -51,21 +53,26 @@ export const useConversationStore = defineStore('conversation', {
                 created_at: intToLong(msg.create_at),
               })
               break
-
             default:
               break
           }
         }
-        // 将更早的消息 prepend 到数组前面，顺序调整为从旧到新
-        // this.messages = [...batch.reverse(), ...this.messages]
+
+        // 将新消息插入到数组开头
+        this.displayMessages = [...newMessages, ...this.displayMessages]
       } finally {
         this.loadingHistory = false
       }
     },
     addMessage(msg: ChatMsg) {
       // 发送或收到实时消息时调用
+      console.debug('addMessage', msg)
+      //如果type不存在,就是0
+      if (!msg.type) {
+        msg.type = MsgType['text'] // 默认类型为文本
+      }
       switch (msg.type) {
-        case msgType['TEXT']:
+        case MsgType['text']:
           this.displayMessages.push({
             ID: msg.id || '',
             From: msg.from || '',

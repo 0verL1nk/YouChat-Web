@@ -1,47 +1,107 @@
-export const enum MessageType {
-  TEXT = "TEXT",
-  IMAGE = "IMAGE",
-  FILE = "FILE",
-  SYSTEM = "SYSTEM",
+export const enum FileType {
+  PDF = "PDF",
+  WORD = "WORD",
+  EXE = "EXE",
+  TXT = "TXT",
+  OTHERS = "OTHERS",
 }
 
-export const encodeMessageType: { [key: string]: number } = {
-  TEXT: 0,
-  IMAGE: 1,
-  FILE: 2,
-  SYSTEM: 3,
+export const encodeFileType: { [key: string]: number } = {
+  PDF: 0,
+  WORD: 1,
+  EXE: 2,
+  TXT: 3,
+  OTHERS: 4,
 };
 
-export const decodeMessageType: { [key: number]: MessageType } = {
-  0: MessageType.TEXT,
-  1: MessageType.IMAGE,
-  2: MessageType.FILE,
-  3: MessageType.SYSTEM,
+export const decodeFileType: { [key: number]: FileType } = {
+  0: FileType.PDF,
+  1: FileType.WORD,
+  2: FileType.EXE,
+  3: FileType.TXT,
+  4: FileType.OTHERS,
 };
 
-export const enum msgType {
-  TEXT = "TEXT",
-  IMAGE = "IMAGE",
-  AUDIO = "AUDIO",
-  VIDEO = "VIDEO",
-  FILE = "FILE",
+export interface ConnectChatWSReq {
+  token?: string;
 }
 
-export const encodemsgType: { [key: string]: number } = {
-  TEXT: 0,
-  IMAGE: 1,
-  AUDIO: 2,
-  VIDEO: 3,
-  FILE: 4,
-};
+export function encodeConnectChatWSReq(message: ConnectChatWSReq): Uint8Array {
+  let bb = popByteBuffer();
+  _encodeConnectChatWSReq(message, bb);
+  return toUint8Array(bb);
+}
 
-export const decodemsgType: { [key: number]: msgType } = {
-  0: msgType.TEXT,
-  1: msgType.IMAGE,
-  2: msgType.AUDIO,
-  3: msgType.VIDEO,
-  4: msgType.FILE,
-};
+function _encodeConnectChatWSReq(message: ConnectChatWSReq, bb: ByteBuffer): void {
+  // optional string token = 1;
+  let $token = message.token;
+  if ($token !== undefined) {
+    writeVarint32(bb, 10);
+    writeString(bb, $token);
+  }
+}
+
+export function decodeConnectChatWSReq(binary: Uint8Array): ConnectChatWSReq {
+  return _decodeConnectChatWSReq(wrapByteBuffer(binary));
+}
+
+function _decodeConnectChatWSReq(bb: ByteBuffer): ConnectChatWSReq {
+  let message: ConnectChatWSReq = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      // optional string token = 1;
+      case 1: {
+        message.token = readString(bb, readVarint32(bb));
+        break;
+      }
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
+
+export interface ConnectChatWSResp {
+}
+
+export function encodeConnectChatWSResp(message: ConnectChatWSResp): Uint8Array {
+  let bb = popByteBuffer();
+  _encodeConnectChatWSResp(message, bb);
+  return toUint8Array(bb);
+}
+
+function _encodeConnectChatWSResp(message: ConnectChatWSResp, bb: ByteBuffer): void {
+}
+
+export function decodeConnectChatWSResp(binary: Uint8Array): ConnectChatWSResp {
+  return _decodeConnectChatWSResp(wrapByteBuffer(binary));
+}
+
+function _decodeConnectChatWSResp(bb: ByteBuffer): ConnectChatWSResp {
+  let message: ConnectChatWSResp = {} as any;
+
+  end_of_message: while (!isAtEnd(bb)) {
+    let tag = readVarint32(bb);
+
+    switch (tag >>> 3) {
+      case 0:
+        break end_of_message;
+
+      default:
+        skipUnknownField(bb, tag & 7);
+    }
+  }
+
+  return message;
+}
 
 export interface ChatMsgImage {
   image_name?: string;
@@ -313,12 +373,8 @@ function _encodeChatMsgFile(message: ChatMsgFile, bb: ByteBuffer): void {
   // optional FileType file_type = 3;
   let $file_type = message.file_type;
   if ($file_type !== undefined) {
-    writeVarint32(bb, 26);
-    let nested = popByteBuffer();
-    _encodeFileType($file_type, nested);
-    writeVarint32(bb, nested.limit);
-    writeByteBuffer(bb, nested);
-    pushByteBuffer(nested);
+    writeVarint32(bb, 24);
+    writeVarint32(bb, encodeFileType[$file_type]);
   }
 
   // optional string file_size = 4;
@@ -357,9 +413,7 @@ function _decodeChatMsgFile(bb: ByteBuffer): ChatMsgFile {
 
       // optional FileType file_type = 3;
       case 3: {
-        let limit = pushTemporaryLength(bb);
-        message.file_type = _decodeFileType(bb);
-        bb.limit = limit;
+        message.file_type = decodeFileType[readVarint32(bb)];
         break;
       }
 
@@ -381,7 +435,7 @@ export interface ChatMsg {
   id?: string;
   from?: string;
   to?: string;
-  type?: msgType;
+  type?: number;
   code?: number;
   created_at?: Long;
   text?: string;
@@ -419,11 +473,11 @@ function _encodeChatMsg(message: ChatMsg, bb: ByteBuffer): void {
     writeString(bb, $to);
   }
 
-  // optional msgType type = 4;
+  // optional int32 type = 4;
   let $type = message.type;
   if ($type !== undefined) {
     writeVarint32(bb, 32);
-    writeVarint32(bb, encodemsgType[$type]);
+    writeVarint64(bb, intToLong($type));
   }
 
   // optional int32 code = 5;
@@ -524,9 +578,9 @@ function _decodeChatMsg(bb: ByteBuffer): ChatMsg {
         break;
       }
 
-      // optional msgType type = 4;
+      // optional int32 type = 4;
       case 4: {
-        message.type = decodemsgType[readVarint32(bb)];
+        message.type = readVarint32(bb);
         break;
       }
 
