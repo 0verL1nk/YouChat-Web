@@ -1,39 +1,103 @@
 # YouChat
 
-This template should help get you started developing with Vue 3 in Vite.
+一个基于 Vue 3 + TypeScript 的实时聊天应用前端项目。
 
-## Recommended IDE Setup
+## 功能特性
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- 🔐 用户认证
+  - 邮箱注册/登录
+  - 验证码支持
+  - Token 认证机制
+- 💬 实时聊天
+  - WebSocket 实时消息推送
+  - 支持多种消息类型
+  - 消息历史记录与分页
+  - 未读消息提醒
+- 👥 联系人管理
+  - 搜索添加联系人
+  - 创建/加入群聊
+  - 会话列表管理
 
-## Type Support for `.vue` Imports in TS
+## 技术栈
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+- Vue 3
+- TypeScript
+- Vite
+- Pinia
+- Vue Router
+- Ant Design Vue
+- WebSocket
 
-## Customize configuration
+## 快速开始
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+### 环境要求
 
-## Project Setup
+- Node.js >= 16
+- npm >= 7
 
-```sh
+### 安装
+
+```bash
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### 开发
 
-```sh
+```bash
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+### 构建
 
-```sh
+```bash
 npm run build
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+## 项目结构
 
-```sh
-npm run lint
 ```
+src/
+├── api/          # API 接口
+├── assets/       # 静态资源
+├── components/   # 组件
+├── router/      # 路由
+├── stores/      # 状态管理
+├── types/       # 类型定义
+├── utils/       # 工具函数
+├── views/       # 页面
+└── App.vue      # 根组件
+```
+
+## 环境配置
+
+在项目根目录创建以下环境文件:
+
+- `.env.development` - 开发环境
+- `.env.production` - 生产环境
+
+配置项:
+
+- `VITE_API_BASE_URL` - API地址
+- `VITE_WS_URL` - WebSocket地址
+
+## 开发指南
+
+1. 代码规范
+
+   - ESLint + Prettier
+   - Vue 3 组合式 API
+   - TypeScript 类型定义
+
+2. 组件开发
+
+   - 组件放在 components/
+   - 页面放在 views/
+   - 使用 .vue 单文件组件
+
+3. 状态管理
+   - 使用 Pinia
+   - 按模块划分 store
+
+## 许可证
+
+MIT
